@@ -27,8 +27,8 @@ constexpr size_t buttonIdPosition = 1;
 constexpr size_t buttonStatePosition = 2;
 
 constexpr uint8_t armId = 0;
-const rb::Angle armDown = 70_deg;
-const rb::Angle armUp = 0_deg;
+const rb::Angle armDown = 0_deg;
+const rb::Angle armUp = 90_deg;
 
 constexpr uint8_t handId = 1;
 const rb::Angle handOpened = 70_deg;
@@ -41,14 +41,14 @@ void setup() {
     auto& man = rb::Manager::get();
 
     man.install();
-    man.initSmartServoBus(1, GPIO_NUM_14);
+    man.initSmartServoBus(2, GPIO_NUM_14);
     // man.servoBus().setId(armId);
     // man.servoBus().limit(armId, armDown, armUp);
 
-    WiFi.begin("Technika", "materidouska");
+    // WiFi.begin("Technika", "materidouska");
+    WiFi.softAP("falcon", "LongLiveMedvedice");
+    printf("%s\n", WiFi.softAPIP().toString().c_str());
     man.leds().yellow(true);
-    // WiFi.softAP("falcon", "LongLiveMedvedice");
-    // printf("%s\n", WiFi.softAPIP().toString().c_str());
 
     WiFiUDP udp;
 
