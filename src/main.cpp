@@ -7,8 +7,10 @@ using namespace rb;
 
 using namespace std;
 
-std::atomic_bool debug(false);
-std::atomic_bool g_armLocked(false);
+bool debug = false;
+bool g_handLocked = false;
+bool g_leftBatteryState = false;
+bool g_rightBatteryState = false;
 
 constexpr rb::MotorId leftMotor = rb::MotorId::M1;
 constexpr rb::MotorId rightMotor = rb::MotorId::M2;
@@ -33,6 +35,14 @@ const rb::Angle armUp = 90_deg;
 constexpr uint8_t handId = 1;
 const rb::Angle handOpened = 70_deg;
 const rb::Angle handClosed = 0_deg;
+
+constexpr uint8_t leftBatteryId = 2;
+const rb::Angle leftBatteryDown = 0_deg;
+const rb::Angle leftBatteryUp = 90_deg;
+
+constexpr uint8_t rightBatteryId = 3;
+const rb::Angle rightBatteryDown = 0_deg;
+const rb::Angle rightBatteryUp = 90_deg;
 
 void handleAxes(const char buffer[bufferSize]);
 void handleButton(const char buffer[bufferSize]);
@@ -119,11 +129,29 @@ void handleAxes(const char buffer[bufferSize]) {
     man.motor(leftMotor).power(-l);
     man.motor(rightMotor).power(-r);
 
-    int armAngle = static_cast<int8_t>(buffer[armAxisPosition]);
-    armAngle = map(armAngle, -128, 128, armDown.deg(), armUp.deg());
-    armAngle = rb::clamp(armAngle, (int)armDown.deg(), (int)armUp.deg());
+    if (g_leftBatteryState) {
+        int leftBatteryAngle = static_cast<int8_t>(buffer[armAxisPosition]);
+        leftBatteryAngle = map(leftBatteryAngle, -128, 128, leftBatteryDown.deg(), leftBatteryUp.deg());
+        leftBatteryAngle = rb::clamp(leftBatteryAngle, (int)leftBatteryDown.deg(), (int)leftBatteryUp.deg());
 
-    man.servoBus().set(armId, Angle::deg(armAngle));
+        man.servoBus().set(leftBatteryId, Angle::deg(leftBatteryAngle));
+    }
+
+    if (g_rightBatteryState) {
+        int rightBatteryAngle = static_cast<int8_t>(buffer[armAxisPosition]);
+        rightBatteryAngle = map(rightBatteryAngle, -128, 128, rightBatteryDown.deg(), rightBatteryUp.deg());
+        rightBatteryAngle = rb::clamp(rightBatteryAngle, (int)rightBatteryDown.deg(), (int)rightBatteryUp.deg());
+
+        man.servoBus().set(rightBatteryId, Angle::deg(rightBatteryAngle));
+    }
+
+    if (!g_leftBatteryState && !g_rightBatteryState) {
+        int armAngle = static_cast<int8_t>(buffer[armAxisPosition]);
+        armAngle = map(armAngle, -128, 128, armDown.deg(), armUp.deg());
+        armAngle = rb::clamp(armAngle, (int)armDown.deg(), (int)armUp.deg());
+
+        man.servoBus().set(armId, Angle::deg(armAngle));
+    }
     // if (static_cast<int8_t>(buffer[armAxisPosition]) > 0) {
     //     man.servoBus().set(armId, armDown);
     // }
@@ -135,7 +163,7 @@ void handleButton(const char buffer[bufferSize]) {
     auto& man = rb::Manager::get();
 
     size_t id = buffer[buttonIdPosition];
-    size_t state = buffer[buttonStatePosition];
+    uint8_t state = buffer[buttonStatePosition];
 
     if (id >= buttonCount) {
         ESP_LOGE("UDP Parser", "Button id out of bounds");
@@ -145,16 +173,22 @@ void handleButton(const char buffer[bufferSize]) {
     switch (id) {
     case 0:
         if (state) {
-            g_armLocked = false;
+            g_handLocked = false;
             man.servoBus().set(handId, handClosed);
         } else {
-            if (!g_armLocked)
+            if (!g_handLocked)
                 man.servoBus().set(handId, handOpened);
         }
         break;
     case 1:
-        g_armLocked = true;
+        g_handLocked = true;
         break;
+
+    case 6:
+        g_leftBatteryState = state;
+
+    case 7:
+        g_rightBatteryState = state;
     default:
         break;
     }
