@@ -51,7 +51,55 @@ void setup() {
     auto& man = rb::Manager::get();
 
     man.install();
-    man.initSmartServoBus(2, GPIO_NUM_14);
+    man.initSmartServoBus(4, GPIO_NUM_14);
+
+    if (!man.expander().digitalRead(SW3)) {
+        man.leds().green(true);
+
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+
+        bool up = false;
+
+        while (man.expander().digitalRead(SW3)) {
+            while (man.expander().digitalRead(SW1)) {
+                vTaskDelay(10);
+            }
+            up = !up;
+
+            if (up) {
+                man.servoBus().set(armId, armUp);
+                man.servoBus().set(handId, handOpened);
+                man.servoBus().set(leftBatteryId, leftBatteryUp);
+                man.servoBus().set(rightBatteryId, rightBatteryUp);
+            } else {
+                man.servoBus().set(armId, armDown);
+                man.servoBus().set(handId, handClosed);
+                man.servoBus().set(leftBatteryId, leftBatteryDown);
+                man.servoBus().set(rightBatteryId, rightBatteryDown);
+            }
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
+
+        man.leds().green(false);
+    }
+
+    if (!man.expander().digitalRead(SW2)) {
+        man.leds().blue(true);
+
+        std::array<uint8_t, 4> ids = { handId, armId, rightBatteryId, leftBatteryId };
+
+        for (auto&& i : ids) {
+            man.leds().green(true);
+            while (man.expander().digitalRead(SW1)) {
+                vTaskDelay(10);
+            }
+            man.leds().green(false);
+            man.servoBus().setId(i);
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+
+        man.leds().blue(false);
+    }
     // man.servoBus().setId(armId);
     // man.servoBus().limit(armId, armDown, armUp);
 
