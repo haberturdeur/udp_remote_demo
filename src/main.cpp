@@ -1,8 +1,13 @@
 #include "RBControl.hpp" // for encoders
 #include "WiFi.h"
 #include <Arduino.h> //; from Roboruka
+#include <Servo.h>
 #include <esp_log.h>
+#include <iostream>
 #include <string>
+
+Servo hand;
+
 using namespace rb;
 
 using namespace std;
@@ -29,20 +34,12 @@ constexpr size_t buttonIdPosition = 1;
 constexpr size_t buttonStatePosition = 2;
 
 constexpr uint8_t armId = 0;
-const rb::Angle armDown = 0_deg;
-const rb::Angle armUp = 90_deg;
+const rb::Angle armDown = 58_deg;
+const rb::Angle armUp = 120_deg;
 
-constexpr uint8_t handId = 1;
-const rb::Angle handOpened = 70_deg;
-const rb::Angle handClosed = 0_deg;
-
-constexpr uint8_t leftBatteryId = 2;
-const rb::Angle leftBatteryDown = 0_deg;
-const rb::Angle leftBatteryUp = 90_deg;
-
-constexpr uint8_t rightBatteryId = 3;
-const rb::Angle rightBatteryDown = 0_deg;
-const rb::Angle rightBatteryUp = 90_deg;
+constexpr uint8_t holderId = 1;
+const rb::Angle handOpened = 0_deg;
+const rb::Angle handClosed = 80_deg;
 
 void handleAxes(const char buffer[bufferSize]);
 void handleButton(const char buffer[bufferSize]);
@@ -50,13 +47,17 @@ void handleButton(const char buffer[bufferSize]);
 void setup() {
     auto& man = rb::Manager::get();
 
-    man.install();
-    man.initSmartServoBus(2, GPIO_NUM_14);
+    man.install(rb::MAN_DISABLE_MOTOR_FAILSAFE);
+    man.initSmartServoBus(1, GPIO_NUM_14);
+    hand.attach(GPIO_NUM_32);
     // man.servoBus().setId(armId);
     // man.servoBus().limit(armId, armDown, armUp);
 
+    // while (true) {
+    // }
+
     // WiFi.begin("Technika", "materidouska");
-    WiFi.softAP("falcon", "LongLiveMedvedice");
+    WiFi.softAP("sokolskacz", "LongLiveMedvedice");
     printf("%s\n", WiFi.softAPIP().toString().c_str());
     man.leds().yellow(true);
 
@@ -113,7 +114,7 @@ void handleAxes(const char buffer[bufferSize]) {
         ESP_LOGE("UDP Parser", "Wrong axis count");
     }
 
-    int x = static_cast<int8_t>(buffer[xAxisPosition]);
+    int x = -static_cast<int8_t>(buffer[xAxisPosition]);
     int y = -static_cast<int8_t>(buffer[yAxisPosition]);
 
     int r = ((y - (x / 1.5f)));
@@ -129,28 +130,29 @@ void handleAxes(const char buffer[bufferSize]) {
     man.motor(leftMotor).power(-l);
     man.motor(rightMotor).power(-r);
 
-    if (g_leftBatteryState) {
-        int leftBatteryAngle = static_cast<int8_t>(buffer[armAxisPosition]);
-        leftBatteryAngle = map(leftBatteryAngle, -128, 128, leftBatteryDown.deg(), leftBatteryUp.deg());
-        leftBatteryAngle = rb::clamp(leftBatteryAngle, (int)leftBatteryDown.deg(), (int)leftBatteryUp.deg());
+    // if (g_leftBatteryState) {
+    //     int leftBatteryAngle = static_cast<int8_t>(buffer[armAxisPosition]);
+    //     leftBatteryAngle = map(leftBatteryAngle, -128, 128, leftBatteryDown.deg(), leftBatteryUp.deg());
+    //     leftBatteryAngle = rb::clamp(leftBatteryAngle, (int)leftBatteryDown.deg(), (int)leftBatteryUp.deg());
 
-        man.servoBus().set(leftBatteryId, Angle::deg(leftBatteryAngle));
-    }
+    //     man.servoBus().set(leftBatteryId, Angle::deg(leftBatteryAngle));
+    // }
 
-    if (g_rightBatteryState) {
-        int rightBatteryAngle = static_cast<int8_t>(buffer[armAxisPosition]);
-        rightBatteryAngle = map(rightBatteryAngle, -128, 128, rightBatteryDown.deg(), rightBatteryUp.deg());
-        rightBatteryAngle = rb::clamp(rightBatteryAngle, (int)rightBatteryDown.deg(), (int)rightBatteryUp.deg());
+    // if (g_rightBatteryState) {
+    //     int rightBatteryAngle = static_cast<int8_t>(buffer[armAxisPosition]);
+    //     rightBatteryAngle = map(rightBatteryAngle, -128, 128, rightBatteryDown.deg(), rightBatteryUp.deg());
+    //     rightBatteryAngle = rb::clamp(rightBatteryAngle, (int)rightBatteryDown.deg(), (int)rightBatteryUp.deg());
 
-        man.servoBus().set(rightBatteryId, Angle::deg(rightBatteryAngle));
-    }
+    //     man.servoBus().set(rightBatteryId, Angle::deg(rightBatteryAngle));
+    // }
 
     if (!g_leftBatteryState && !g_rightBatteryState) {
         int armAngle = static_cast<int8_t>(buffer[armAxisPosition]);
-        armAngle = map(armAngle, -128, 128, armDown.deg(), armUp.deg());
+        armAngle = map(armAngle, 128, -128, armDown.deg(), armUp.deg());
         armAngle = rb::clamp(armAngle, (int)armDown.deg(), (int)armUp.deg());
 
         man.servoBus().set(armId, Angle::deg(armAngle));
+        cout << Angle::deg(armAngle).deg() << endl;
     }
     // if (static_cast<int8_t>(buffer[armAxisPosition]) > 0) {
     //     man.servoBus().set(armId, armDown);
@@ -174,21 +176,18 @@ void handleButton(const char buffer[bufferSize]) {
     case 0:
         if (state) {
             g_handLocked = false;
-            man.servoBus().set(handId, handClosed);
+            // man.servoBus().set(handId, handClosed);
+            hand.write(handClosed.deg());
         } else {
-            if (!g_handLocked)
-                man.servoBus().set(handId, handOpened);
+            if (!g_handLocked) {
+                hand.write(handOpened.deg());
+                // man.servoBus().set(handId, handOpened);
+            }
         }
         break;
     case 1:
         g_handLocked = true;
         break;
-
-    case 6:
-        g_leftBatteryState = state;
-
-    case 7:
-        g_rightBatteryState = state;
     default:
         break;
     }
